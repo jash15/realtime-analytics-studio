@@ -257,3 +257,4 @@ function openDetail(evt: TelemetryEvent) {
     <EventDetailModal :event="selectedEvent" @close="selectedEvent = null" />
   </div>
 </template>
+

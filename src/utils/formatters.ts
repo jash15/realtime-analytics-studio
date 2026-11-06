@@ -36,3 +36,4 @@ export function getStatusCodeColor(code: number): { text: string; bg: string; bo
   }
   return { text: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' };
 }
+

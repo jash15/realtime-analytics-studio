@@ -199,3 +199,4 @@ const history = computed(() => alertEngine.incidentHistory.value);
     </div>
   </div>
 </template>
+

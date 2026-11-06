@@ -95,3 +95,4 @@ export interface SimulationChaosState {
   ddosSpikeActive: boolean;
   customInjectionCount: number;
 }
+

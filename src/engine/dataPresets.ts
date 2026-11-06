@@ -66,3 +66,4 @@ export const SCENARIO_ENDPOINTS: Record<ScenarioMode, EndpointDefinition[]> = {
     { path: '/api/v1/firewall/rules', method: 'GET', type: 'api_call', baseLatency: 50, variance: 20, errorProbability: 0.01 },
   ],
 };
+

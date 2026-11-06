@@ -226,3 +226,4 @@ const apdexStatus = computed(() => {
     </div>
   </div>
 </template>
+

@@ -72,3 +72,4 @@ const stages = computed(() => streamEngine.funnelStages.value);
     </div>
   </div>
 </template>
+

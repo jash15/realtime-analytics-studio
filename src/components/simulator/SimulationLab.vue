@@ -327,3 +327,4 @@ await fetch('/api/telemetry', {
     </div>
   </div>
 </template>
+

@@ -160,3 +160,4 @@ await fetch('/api/telemetry', {
 ## 🛡️ License
 
 Released under the [MIT License](LICENSE).
+

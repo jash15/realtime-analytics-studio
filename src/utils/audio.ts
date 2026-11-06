@@ -72,3 +72,4 @@ class AudioNotifier {
 }
 
 export const soundFx = new AudioNotifier();
+
