@@ -8,13 +8,6 @@ const hoveredIndex = ref<number | null>(null);
 
 const buckets = computed(() => streamEngine.timeSeriesBuckets.value);
 
-// Chart dimensions
-const width = 800;
-const height = 240;
-const padding = { top: 20, right: 24, bottom: 30, left: 45 };
-const plotWidth = width - padding.left - padding.right;
-const plotHeight = height - padding.top - padding.bottom;
-
 // Scales
 const maxRps = computed(() => {
   const max = Math.max(...buckets.value.map(b => b.count), 15);
@@ -30,26 +23,25 @@ const maxLatency = computed(() => {
 const rpsAreaPath = computed<{ stroke: string; area: string }>(() => {
   const list = buckets.value;
   if (list.length < 2) return { stroke: '', area: '' };
+
   const points = list.map((b, i) => {
-    const x = padding.left + (i / (list.length - 1)) * plotWidth;
-    const y = padding.top + plotHeight - (b.count / maxRps.value) * plotHeight;
+    const x = (i / (list.length - 1)) * 1000;
+    const y = 200 - (b.count / maxRps.value) * 190;
     return { x, y };
   });
 
   const first = points[0];
   const last = points[points.length - 1];
-  const baseline = padding.top + plotHeight;
 
   let d = `M ${first.x},${first.y}`;
   for (let i = 1; i < points.length; i++) {
-    // Smooth bezier curve
     const prev = points[i - 1];
     const curr = points[i];
     const cx = (prev.x + curr.x) / 2;
     d += ` C ${cx},${prev.y} ${cx},${curr.y} ${curr.x},${curr.y}`;
   }
   const strokePath = d;
-  const areaPath = `${d} L ${last.x},${baseline} L ${first.x},${baseline} Z`;
+  const areaPath = `${d} L ${last.x},200 L ${first.x},200 Z`;
 
   return { stroke: strokePath, area: areaPath };
 });
@@ -59,8 +51,8 @@ const latencyLinePath = computed(() => {
   const list = buckets.value;
   if (list.length < 2) return '';
   const points = list.map((b, i) => {
-    const x = padding.left + (i / (list.length - 1)) * plotWidth;
-    const y = padding.top + plotHeight - (b.p95Latency / maxLatency.value) * plotHeight;
+    const x = (i / (list.length - 1)) * 1000;
+    const y = 200 - (b.p95Latency / maxLatency.value) * 190;
     return { x, y };
   });
 
@@ -77,30 +69,27 @@ const latencyLinePath = computed(() => {
 // Y-axis grid ticks
 const rpsTicks = computed(() => {
   const step = maxRps.value / 4;
-  return [0, step, step * 2, step * 3, maxRps.value].map(val => ({
-    val: Math.round(val),
-    y: padding.top + plotHeight - (val / maxRps.value) * plotHeight,
-  }));
+  return [maxRps.value, step * 3, step * 2, step, 0].map(val => Math.round(val));
 });
 
-// X-axis time labels (every 10 points)
+// X-axis time labels (sample 6 points)
 const timeTicks = computed(() => {
   const list = buckets.value;
   const ticks = [];
-  for (let i = 0; i < list.length; i += 10) {
-    ticks.push({
-      label: list[i].label,
-      x: padding.left + (i / (list.length - 1)) * plotWidth,
-    });
+  const step = Math.floor((list.length - 1) / 5);
+  for (let i = 0; i < list.length; i += step) {
+    if (ticks.length < 6) {
+      ticks.push(list[i].label);
+    }
   }
   return ticks;
 });
 
 function handleMouseMove(e: MouseEvent) {
-  const svg = (e.currentTarget as SVGElement).getBoundingClientRect();
-  const relX = e.clientX - svg.left;
-  const clampedX = Math.max(padding.left, Math.min(padding.left + plotWidth, relX));
-  const ratio = (clampedX - padding.left) / plotWidth;
+  const target = e.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const relX = e.clientX - rect.left;
+  const ratio = Math.max(0, Math.min(1, relX / rect.width));
   const index = Math.round(ratio * (buckets.value.length - 1));
   hoveredIndex.value = Math.max(0, Math.min(buckets.value.length - 1, index));
 }
@@ -113,7 +102,7 @@ function handleMouseLeave() {
 <template>
   <div class="rounded-2xl bg-dark-900/80 border border-dark-800 p-4 lg:p-5 relative overflow-hidden">
     <!-- Chart Header -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
       <div class="flex items-center gap-2">
         <div class="p-1.5 rounded-lg bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
           <Activity class="w-4 h-4" />
@@ -162,170 +151,138 @@ function handleMouseLeave() {
       </div>
     </div>
 
-    <!-- SVG Realtime Chart -->
-    <div class="relative w-full aspect-[21/9] min-h-[220px]">
-      <svg
-        class="w-full h-full select-none"
-        :viewBox="`0 0 ${width} ${height}`"
-        preserveAspectRatio="none"
+    <!-- Chart Grid Container -->
+    <div class="relative flex gap-2">
+      <!-- Left Y-Axis HTML Labels (Never squished or distorted) -->
+      <div class="w-10 flex flex-col justify-between text-right text-[10px] font-mono text-slate-500 py-1 select-none flex-shrink-0">
+        <span v-for="tick in rpsTicks" :key="tick">{{ tick }}</span>
+      </div>
+
+      <!-- Main Chart Canvas Area -->
+      <div
+        class="relative flex-1 h-52 cursor-crosshair select-none bg-dark-950/40 rounded-xl border border-dark-800/80 overflow-hidden"
         @mousemove="handleMouseMove"
         @mouseleave="handleMouseLeave"
       >
-        <defs>
-          <!-- Gradient for RPS Area -->
-          <linearGradient id="rpsAreaGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35" />
-            <stop offset="80%" stop-color="#06b6d4" stop-opacity="0.02" />
-            <stop offset="100%" stop-color="#06b6d4" stop-opacity="0" />
-          </linearGradient>
-
-          <!-- Glow Filter -->
-          <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="2.5" result="blur" />
-            <feMerge>
-              <feMergeNode in="blur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-
         <!-- Horizontal Grid Lines -->
-        <g class="opacity-20 stroke-slate-600" stroke-dasharray="3 3">
-          <line
-            v-for="tick in rpsTicks"
-            :key="tick.y"
-            :x1="padding.left"
-            :y1="tick.y"
-            :x2="width - padding.right"
-            :y2="tick.y"
-          />
-        </g>
-
-        <!-- Y Axis Labels (RPS on left) -->
-        <g class="text-[10px] fill-slate-500 font-mono" text-anchor="end">
-          <text
-            v-for="tick in rpsTicks"
-            :key="tick.val"
-            :x="padding.left - 8"
-            :y="tick.y + 3"
-          >
-            {{ tick.val }}
-          </text>
-        </g>
-
-        <!-- X Axis Labels (Time) -->
-        <g class="text-[10px] fill-slate-500 font-mono" text-anchor="middle">
-          <text
-            v-for="tick in timeTicks"
-            :key="tick.label"
-            :x="tick.x"
-            :y="height - 8"
-          >
-            {{ tick.label }}
-          </text>
-        </g>
-
-        <!-- Error Spikes (red vertical markers at baseline) -->
-        <g v-if="viewMode !== 'latency'">
-          <template v-for="(b, i) in buckets" :key="i">
-            <line
-              v-if="b.errorCount > 0"
-              :x1="padding.left + (i / (buckets.length - 1)) * plotWidth"
-              :y1="padding.top + plotHeight"
-              :x2="padding.left + (i / (buckets.length - 1)) * plotWidth"
-              :y2="padding.top + plotHeight - Math.min(plotHeight, b.errorCount * 12)"
-              stroke="#f43f5e"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              opacity="0.8"
-            />
-          </template>
-        </g>
-
-        <!-- RPS Area and Line -->
-        <g v-if="viewMode !== 'latency'">
-          <path :d="rpsAreaPath.area" fill="url(#rpsAreaGradient)" />
-          <path
-            :d="rpsAreaPath.stroke"
-            fill="none"
-            stroke="#06b6d4"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            filter="url(#neonGlow)"
-          />
-        </g>
-
-        <!-- Latency Line -->
-        <g v-if="viewMode !== 'rps'">
-          <path
-            :d="latencyLinePath"
-            fill="none"
-            stroke="#10b981"
-            stroke-width="2"
-            stroke-dasharray="4 3"
-            stroke-linecap="round"
-            opacity="0.85"
-          />
-        </g>
-
-        <!-- Hover Crosshair -->
-        <g v-if="hoveredIndex !== null">
-          <!-- Vertical Line -->
-          <line
-            :x1="padding.left + (hoveredIndex / (buckets.length - 1)) * plotWidth"
-            :y1="padding.top"
-            :x2="padding.left + (hoveredIndex / (buckets.length - 1)) * plotWidth"
-            :y2="padding.top + plotHeight"
-            stroke="#94a3b8"
-            stroke-width="1.5"
-            stroke-dasharray="2 2"
-            opacity="0.6"
-          />
-          <!-- Point Marker on RPS -->
-          <circle
-            :cx="padding.left + (hoveredIndex / (buckets.length - 1)) * plotWidth"
-            :cy="padding.top + plotHeight - (buckets[hoveredIndex].count / maxRps) * plotHeight"
-            r="4.5"
-            fill="#06b6d4"
-            stroke="#0b0f19"
-            stroke-width="2"
-          />
-          <!-- Point Marker on Latency -->
-          <circle
-            :cx="padding.left + (hoveredIndex / (buckets.length - 1)) * plotWidth"
-            :cy="padding.top + plotHeight - (buckets[hoveredIndex].p95Latency / maxLatency) * plotHeight"
-            r="4.5"
-            fill="#10b981"
-            stroke="#0b0f19"
-            stroke-width="2"
-          />
-        </g>
-      </svg>
-
-      <!-- Tooltip Box -->
-      <div
-        v-if="hoveredIndex !== null"
-        class="absolute pointer-events-none z-20 bg-dark-900/95 border border-dark-700 rounded-xl p-2.5 shadow-2xl text-xs backdrop-blur-md transition-all"
-        :style="{
-          left: `${Math.min(75, Math.max(10, ((hoveredIndex / (buckets.length - 1)) * 100)))}%`,
-          top: '10px',
-        }"
-      >
-        <div class="font-mono text-[11px] text-slate-400 mb-1 border-b border-dark-800 pb-1 flex items-center justify-between gap-3">
-          <span>Time: {{ buckets[hoveredIndex].label }}</span>
-          <span v-if="buckets[hoveredIndex].errorCount > 0" class="text-rose-400 flex items-center gap-1 font-bold">
-            <ShieldAlert class="w-3 h-3" /> {{ buckets[hoveredIndex].errorCount }} errors
-          </span>
+        <div class="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 px-1 py-1">
+          <div v-for="n in 5" :key="n" class="w-full border-b border-dashed border-slate-500"></div>
         </div>
-        <div class="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-[11px]">
-          <span class="text-slate-400">Throughput:</span>
-          <span class="text-cyan-400 font-bold text-right">{{ buckets[hoveredIndex].count }} eps</span>
-          <span class="text-slate-400">P95 Latency:</span>
-          <span class="text-emerald-400 font-bold text-right">{{ buckets[hoveredIndex].p95Latency }} ms</span>
-          <span class="text-slate-400">Avg Latency:</span>
-          <span class="text-slate-200 text-right">{{ buckets[hoveredIndex].avgLatency }} ms</span>
+
+        <!-- SVG Visual Paths -->
+        <svg
+          class="w-full h-full overflow-visible"
+          viewBox="0 0 1000 200"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="rpsAreaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.38" />
+              <stop offset="85%" stop-color="#06b6d4" stop-opacity="0.04" />
+              <stop offset="100%" stop-color="#06b6d4" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+
+          <!-- Error Spike Markers -->
+          <g v-if="viewMode !== 'latency'">
+            <template v-for="(b, i) in buckets" :key="i">
+              <line
+                v-if="b.errorCount > 0"
+                :x1="(i / (buckets.length - 1)) * 1000"
+                y1="200"
+                :x2="(i / (buckets.length - 1)) * 1000"
+                :y2="200 - Math.min(180, b.errorCount * 25)"
+                stroke="#f43f5e"
+                stroke-width="3"
+                vector-effect="non-scaling-stroke"
+                opacity="0.8"
+              />
+            </template>
+          </g>
+
+          <!-- RPS Area Curve -->
+          <g v-if="viewMode !== 'latency'">
+            <path :d="rpsAreaPath.area" fill="url(#rpsAreaGradient)" />
+            <path
+              :d="rpsAreaPath.stroke"
+              fill="none"
+              stroke="#06b6d4"
+              stroke-width="2.5"
+              vector-effect="non-scaling-stroke"
+            />
+          </g>
+
+          <!-- Latency Line Curve -->
+          <g v-if="viewMode !== 'rps'">
+            <path
+              :d="latencyLinePath"
+              fill="none"
+              stroke="#10b981"
+              stroke-width="2"
+              stroke-dasharray="5 3"
+              vector-effect="non-scaling-stroke"
+              opacity="0.85"
+            />
+          </g>
+        </svg>
+
+        <!-- Hover Guideline & Point Markers -->
+        <div
+          v-if="hoveredIndex !== null"
+          class="absolute top-0 bottom-0 pointer-events-none"
+          :style="{ left: `${(hoveredIndex / (buckets.length - 1)) * 100}%` }"
+        >
+          <div class="w-px h-full bg-slate-400/60 border-l border-dashed border-slate-300"></div>
+
+          <!-- Marker on RPS line -->
+          <div
+            v-if="viewMode !== 'latency'"
+            class="absolute w-3 h-3 -ml-1.5 rounded-full bg-brand-cyan border-2 border-dark-950 shadow-md"
+            :style="{
+              top: `${Math.max(4, Math.min(96, 100 - (buckets[hoveredIndex].count / maxRps) * 95))}%`
+            }"
+          ></div>
+
+          <!-- Marker on Latency line -->
+          <div
+            v-if="viewMode !== 'rps'"
+            class="absolute w-3 h-3 -ml-1.5 rounded-full bg-brand-emerald border-2 border-dark-950 shadow-md"
+            :style="{
+              top: `${Math.max(4, Math.min(96, 100 - (buckets[hoveredIndex].p95Latency / maxLatency) * 95))}%`
+            }"
+          ></div>
+        </div>
+
+        <!-- Tooltip Box (HTML Overlay) -->
+        <div
+          v-if="hoveredIndex !== null"
+          class="absolute pointer-events-none z-30 bg-dark-900/95 border border-dark-700 rounded-xl p-2.5 shadow-2xl text-xs backdrop-blur-md transition-all font-mono"
+          :style="{
+            left: `${Math.min(72, Math.max(6, ((hoveredIndex / (buckets.length - 1)) * 100)))}%`,
+            top: '8px',
+          }"
+        >
+          <div class="text-[11px] text-slate-400 mb-1 border-b border-dark-800 pb-1 flex items-center justify-between gap-3">
+            <span>Time: {{ buckets[hoveredIndex].label }}</span>
+            <span v-if="buckets[hoveredIndex].errorCount > 0" class="text-rose-400 flex items-center gap-1 font-bold">
+              <ShieldAlert class="w-3 h-3" /> {{ buckets[hoveredIndex].errorCount }} errors
+            </span>
+          </div>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]">
+            <span class="text-slate-400">Throughput:</span>
+            <span class="text-cyan-400 font-bold text-right">{{ buckets[hoveredIndex].count }} eps</span>
+            <span class="text-slate-400">P95 Latency:</span>
+            <span class="text-emerald-400 font-bold text-right">{{ buckets[hoveredIndex].p95Latency }} ms</span>
+            <span class="text-slate-400">Avg Latency:</span>
+            <span class="text-slate-200 text-right">{{ buckets[hoveredIndex].avgLatency }} ms</span>
+          </div>
         </div>
       </div>
+    </div>
+
+    <!-- Bottom X-Axis HTML Time Labels -->
+    <div class="flex justify-between pl-12 pr-2 mt-2 text-[10px] font-mono text-slate-500 select-none">
+      <span v-for="t in timeTicks" :key="t">{{ t }}</span>
     </div>
   </div>
 </template>

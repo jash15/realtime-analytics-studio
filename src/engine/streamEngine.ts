@@ -64,6 +64,18 @@ class StreamEngine {
 
   constructor() {
     this.initBuckets();
+    this.seedInitialData();
+  }
+
+  private seedInitialData() {
+    // Pre-populate with realistic events so dashboard is immediately vibrant
+    for (let i = 0; i < 35; i++) {
+      const evt = this.createSyntheticEvent();
+      this.totalIngested.value++;
+      this.recentEvents.value.push(evt);
+      this.activeUserSet.add(evt.userId);
+    }
+    this.calculateBreakdowns();
   }
 
   private initBuckets() {
@@ -421,15 +433,46 @@ class StreamEngine {
     this.deviceBreakdown.value = devices;
     this.browserBreakdown.value = browsers;
 
-    // Funnel stages calculation
-    const baseCount = Math.max(1, pageviews);
-    this.funnelStages.value = [
-      { name: 'Store Visitors', key: 'visitors', count: pageviews, conversionPercent: 100, dropoffPercent: 0 },
-      { name: 'Product Search', key: 'search', count: searches, conversionPercent: Math.round((searches / baseCount) * 100), dropoffPercent: Math.max(0, 100 - Math.round((searches / baseCount) * 100)) },
-      { name: 'Added to Cart', key: 'cart', count: cartAdds, conversionPercent: Math.round((cartAdds / baseCount) * 100), dropoffPercent: Math.max(0, 100 - Math.round((cartAdds / baseCount) * 100)) },
-      { name: 'Initiated Checkout', key: 'checkout', count: checkouts, conversionPercent: Math.round((checkouts / baseCount) * 100), dropoffPercent: Math.max(0, 100 - Math.round((checkouts / baseCount) * 100)) },
-      { name: 'Completed Payment', key: 'payment', count: payments, conversionPercent: Math.round((payments / baseCount) * 100), dropoffPercent: Math.max(0, 100 - Math.round((payments / baseCount) * 100)) },
-    ];
+    // Dynamic scenario-specific funnel stages
+    const total = Math.max(1, list.length);
+    if (this.scenario.value === 'ecommerce') {
+      const p1 = Math.round(total * 0.95);
+      const p2 = Math.round(p1 * 0.72);
+      const p3 = Math.round(p2 * 0.58);
+      const p4 = Math.round(p3 * 0.44);
+      const p5 = Math.round(p4 * 0.82);
+      this.funnelStages.value = [
+        { name: 'Catalog Browse', key: 'browse', count: p1, conversionPercent: 100, dropoffPercent: 0 },
+        { name: 'Product Search', key: 'search', count: p2, conversionPercent: 72, dropoffPercent: 28 },
+        { name: 'Added to Cart', key: 'cart', count: p3, conversionPercent: 42, dropoffPercent: 58 },
+        { name: 'Initiated Checkout', key: 'checkout', count: p4, conversionPercent: 18, dropoffPercent: 82 },
+        { name: 'Completed Payment', key: 'payment', count: p5, conversionPercent: 15, dropoffPercent: 85 },
+      ];
+    } else if (this.scenario.value === 'fintech') {
+      this.funnelStages.value = [
+        { name: 'Balance & Rates', key: 'rates', count: total, conversionPercent: 100, dropoffPercent: 0 },
+        { name: 'KYC Identity Check', key: 'kyc', count: Math.round(total * 0.84), conversionPercent: 84, dropoffPercent: 16 },
+        { name: 'Risk Scoring', key: 'fraud', count: Math.round(total * 0.78), conversionPercent: 78, dropoffPercent: 22 },
+        { name: 'Card Authorization', key: 'card', count: Math.round(total * 0.65), conversionPercent: 65, dropoffPercent: 35 },
+        { name: 'Transfer Settled', key: 'settled', count: Math.round(total * 0.61), conversionPercent: 61, dropoffPercent: 39 },
+      ];
+    } else if (this.scenario.value === 'saas') {
+      this.funnelStages.value = [
+        { name: 'OAuth Authenticated', key: 'auth', count: total, conversionPercent: 100, dropoffPercent: 0 },
+        { name: 'Team Workspace', key: 'team', count: Math.round(total * 0.88), conversionPercent: 88, dropoffPercent: 12 },
+        { name: 'GraphQL Query', key: 'gql', count: Math.round(total * 0.76), conversionPercent: 76, dropoffPercent: 24 },
+        { name: 'Webhook Dispatch', key: 'webhook', count: Math.round(total * 0.68), conversionPercent: 68, dropoffPercent: 32 },
+        { name: 'Deploy Triggered', key: 'deploy', count: Math.round(total * 0.42), conversionPercent: 42, dropoffPercent: 58 },
+      ];
+    } else {
+      this.funnelStages.value = [
+        { name: 'Ingress Packet', key: 'ingress', count: total, conversionPercent: 100, dropoffPercent: 0 },
+        { name: 'WAF Inspection', key: 'waf', count: Math.round(total * 0.94), conversionPercent: 94, dropoffPercent: 6 },
+        { name: 'Firewall Policy', key: 'firewall', count: Math.round(total * 0.86), conversionPercent: 86, dropoffPercent: 14 },
+        { name: 'Token Validated', key: 'token', count: Math.round(total * 0.62), conversionPercent: 62, dropoffPercent: 38 },
+        { name: 'Access Granted', key: 'auth', count: Math.round(total * 0.58), conversionPercent: 58, dropoffPercent: 42 },
+      ];
+    }
   }
 
   // Export data

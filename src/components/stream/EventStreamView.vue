@@ -56,7 +56,7 @@ function openDetail(evt: TelemetryEvent) {
 </script>
 
 <template>
-  <div class="rounded-2xl bg-dark-900/80 border border-dark-800 p-4 lg:p-5 flex flex-col h-[700px]">
+  <div class="rounded-2xl bg-dark-900/80 border border-dark-800 p-4 lg:p-5 flex flex-col min-h-[500px] h-[calc(100vh-280px)] max-h-[700px]">
     <!-- Top Filter & Search Bar -->
     <div class="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3 border-b border-dark-800">
       <div class="flex items-center gap-2">
